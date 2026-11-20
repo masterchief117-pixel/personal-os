@@ -1,0 +1,18 @@
+Personal OS Regression Report
+Generated: 2026-11-19T13:55:21+01:00
+
+PASS Database connection
+PASS Invitation email requires explicit SMTP settings
+PASS Goals table
+PASS Journal table
+PASS Focus table
+PASS Backup schedule table
+PASS Goal CRUD and ownership
+PASS Journal create update and delete
+PASS Focus create completion and cancellation
+PASS Automation rule ownership and toggle
+PASS Event automation executes once and is auditable
+PASS Backup schedule create update and delete
+PASS Reminder create delivery ownership
+
+SUMMARY 13/13 passed
