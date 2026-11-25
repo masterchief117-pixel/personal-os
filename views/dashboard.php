@@ -29,7 +29,7 @@
       </a>
       <a class="nav-item" href="#tasks">
         <svg viewBox="0 0 24 24"><path d="M9 11 12 14l9-9M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-        <span>Tasks</span><span class="nav-count"><?= (int) $stats['pending_tasks'] ?></span>
+        <span>Tasks</span><span class="nav-count" id="sidebarTaskCount"><?= (int) $stats['pending_tasks'] ?></span>
       </a>
       <a class="nav-item" href="#notes">
         <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 2.5L17.5 8H14V4.5ZM8 13h8v2H8v-2Zm0 4h8v2H8v-2Z"/></svg>
@@ -180,7 +180,7 @@
             <small>Focus sessions</small>
           </a>
         </div>
-        <div class="weather-widget" aria-live="polite">
+        <div class="weather-widget" id="weatherWidget" role="button" tabindex="0" title="Click to toggle °C / °F" aria-live="polite">
           <span class="weather-icon" id="weatherIcon" aria-hidden="true">🌤️</span>
           <div class="weather-copy">
             <strong id="weatherTemperature">--°</strong>
@@ -194,9 +194,15 @@
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Action list</p>
-            <h2 id="tasks-heading">Tasks <span><?= count($tasks) ?></span></h2>
+            <h2 id="tasks-heading">Tasks <span id="taskHeaderCount"><?= count($tasks) ?></span></h2>
           </div>
-          <button class="text-button" type="button" id="taskFilterButton">All tasks <span>⌄</span></button>
+          <div class="task-panel-controls">
+            <button class="text-button" type="button" id="taskFilterButton">All tasks <span>⌄</span></button>
+            <div class="view-toggle" role="group" aria-label="Task view">
+              <button class="view-btn active" id="listViewBtn" aria-pressed="true" title="List view" type="button">☰</button>
+              <button class="view-btn" id="boardViewBtn" aria-pressed="false" title="Board view" type="button">⊞</button>
+            </div>
+          </div>
         </div>
 
         <div class="task-list" id="taskList">
@@ -208,7 +214,7 @@
             </div>
           <?php else: ?>
             <?php foreach ($tasks as $task): ?>
-              <article class="task-row <?= $task['status'] === 'completed' ? 'is-complete' : '' ?>" id="task-<?= (int) $task['id'] ?>" data-task-id="<?= (int) $task['id'] ?>" data-status="<?= htmlspecialchars($task['status']) ?>">
+              <article class="task-row <?= $task['status'] === 'completed' ? 'is-complete' : '' ?>" id="task-<?= (int) $task['id'] ?>" data-task-id="<?= (int) $task['id'] ?>" data-status="<?= htmlspecialchars($task['status']) ?>" data-category="<?= htmlspecialchars($task['category']) ?>" data-priority="<?= htmlspecialchars($task['priority']) ?>">
                 <button class="task-check" type="button" aria-label="Toggle <?= htmlspecialchars($task['title']) ?>">
                   <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
                 </button>
@@ -244,12 +250,48 @@
             <?php foreach ($notes as $note): ?>
               <article class="note-card note-<?= htmlspecialchars($note['color']) ?>" id="note-<?= (int) $note['id'] ?>" data-note-id="<?= (int) $note['id'] ?>">
                 <?php if ($note['is_pinned']): ?><span class="pin" aria-label="Pinned">◆</span><?php endif; ?>
+                <button class="note-delete" type="button" aria-label="Delete note" title="Delete note">×</button>
                 <h3><?= htmlspecialchars($note['title']) ?></h3>
                 <p><?= htmlspecialchars($note['content']) ?></p>
                 <time datetime="<?= htmlspecialchars($note['updated_at']) ?>">Edited <?= date('M j', strtotime($note['updated_at'])) ?></time>
               </article>
             <?php endforeach; ?>
           <?php endif; ?>
+        </div>
+
+        <div class="kanban-board" id="kanbanBoard" hidden aria-label="Kanban board">
+          <div class="kanban-col" data-status="todo">
+            <div class="kanban-col-header">
+              <span class="kanban-col-dot violet"></span>
+              <h3>To Do</h3>
+              <span class="kanban-col-count" id="kcount-todo">0</span>
+            </div>
+            <div class="kanban-cards" id="col-todo" role="list" aria-label="To Do tasks"></div>
+          </div>
+          <div class="kanban-col" data-status="in_progress">
+            <div class="kanban-col-header">
+              <span class="kanban-col-dot cyan"></span>
+              <h3>In Progress</h3>
+              <span class="kanban-col-count" id="kcount-in_progress">0</span>
+            </div>
+            <div class="kanban-cards" id="col-in_progress" role="list" aria-label="In Progress tasks"></div>
+          </div>
+          <div class="kanban-col" data-status="completed">
+            <div class="kanban-col-header">
+              <span class="kanban-col-dot green"></span>
+              <h3>Done</h3>
+              <span class="kanban-col-count" id="kcount-completed">0</span>
+            </div>
+            <div class="kanban-cards" id="col-completed" role="list" aria-label="Done tasks"></div>
+          </div>
+          <div class="kanban-col" data-status="archived">
+            <div class="kanban-col-header">
+              <span class="kanban-col-dot muted"></span>
+              <h3>Archived</h3>
+              <span class="kanban-col-count" id="kcount-archived">0</span>
+            </div>
+            <div class="kanban-cards" id="col-archived" role="list" aria-label="Archived tasks"></div>
+          </div>
         </div>
       </section>
 
@@ -261,16 +303,16 @@
           </div>
           <button class="icon-button small" type="button" aria-label="Refresh stats" id="refreshStatsButton">↻</button>
         </div>
-        <div class="completion-ring" style="--progress: <?= (int) $stats['completion_rate'] ?>">
+        <div class="completion-ring" id="completionRing" style="--progress: <?= (int) $stats['completion_rate'] ?>">
           <div class="ring-inner">
-            <strong><?= (int) $stats['completion_rate'] ?>%</strong>
+            <strong id="completionRateText"><?= (int) $stats['completion_rate'] ?>%</strong>
             <span>Complete</span>
           </div>
         </div>
         <div class="stat-grid">
-          <div><span class="stat-icon violet">✓</span><strong><?= (int) $stats['completed_tasks'] ?></strong><small>Completed</small></div>
-          <div><span class="stat-icon cyan">◷</span><strong><?= (int) $stats['active_tasks'] ?></strong><small>In progress</small></div>
-          <div><span class="stat-icon amber">▤</span><strong><?= (int) $stats['total_notes'] ?></strong><small>Notes</small></div>
+          <div><span class="stat-icon violet">✓</span><strong id="statCompletedTasks"><?= (int) $stats['completed_tasks'] ?></strong><small>Completed</small></div>
+          <div><span class="stat-icon cyan">◷</span><strong id="statActiveTasks"><?= (int) $stats['active_tasks'] ?></strong><small>In progress</small></div>
+          <div><span class="stat-icon amber">▤</span><strong id="statTotalNotes"><?= (int) $stats['total_notes'] ?></strong><small>Notes</small></div>
         </div>
         <div class="weekly-chart" id="weeklyChart" aria-label="Seven-day task activity">
           <?php foreach ($weeklyActivity as $day): ?>
@@ -283,7 +325,7 @@
         <div class="system-vitals" aria-live="polite">
           <div class="vitals-heading"><strong>Disk usage</strong><span id="diskUsageText">Loading disk metrics…</span></div>
           <div class="bar-track" id="diskUsageProgress" role="progressbar" aria-label="Disk usage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-            <i id="diskUsageBar"></i>
+            <i id="diskUsageBar" style="width: 0%;"></i>
           </div>
           <small id="serverInfoText">Loading server information…</small>
         </div>
@@ -308,6 +350,41 @@
           <?php if (empty($logs)): ?>
             <div class="empty-state compact"><strong>No recent activity</strong></div>
           <?php endif; ?>
+        </div>
+
+        <div class="kanban-board" id="kanbanBoard" hidden aria-label="Kanban board">
+          <div class="kanban-col" data-status="todo">
+            <div class="kanban-col-header">
+              <span class="kanban-col-dot violet"></span>
+              <h3>To Do</h3>
+              <span class="kanban-col-count" id="kcount-todo">0</span>
+            </div>
+            <div class="kanban-cards" id="col-todo" role="list" aria-label="To Do tasks"></div>
+          </div>
+          <div class="kanban-col" data-status="in_progress">
+            <div class="kanban-col-header">
+              <span class="kanban-col-dot cyan"></span>
+              <h3>In Progress</h3>
+              <span class="kanban-col-count" id="kcount-in_progress">0</span>
+            </div>
+            <div class="kanban-cards" id="col-in_progress" role="list" aria-label="In Progress tasks"></div>
+          </div>
+          <div class="kanban-col" data-status="completed">
+            <div class="kanban-col-header">
+              <span class="kanban-col-dot green"></span>
+              <h3>Done</h3>
+              <span class="kanban-col-count" id="kcount-completed">0</span>
+            </div>
+            <div class="kanban-cards" id="col-completed" role="list" aria-label="Done tasks"></div>
+          </div>
+          <div class="kanban-col" data-status="archived">
+            <div class="kanban-col-header">
+              <span class="kanban-col-dot muted"></span>
+              <h3>Archived</h3>
+              <span class="kanban-col-count" id="kcount-archived">0</span>
+            </div>
+            <div class="kanban-cards" id="col-archived" role="list" aria-label="Archived tasks"></div>
+          </div>
         </div>
       </section>
     </div>
@@ -362,11 +439,17 @@
         <button class="icon-button small modal-close" type="button" aria-label="Close">×</button>
       </div>
       <form id="taskForm">
+        <div class="smart-input-wrap">
+          <label class="smart-label">⚡ Smart input <span class="smart-badge">NLP</span>
+            <input type="text" id="smartInput" placeholder='e.g. "File taxes by Friday 5pm #finance !urgent"' autocomplete="off" spellcheck="false">
+          </label>
+          <p class="parse-preview" id="parsePreview" aria-live="polite"></p>
+        </div>
         <label>Task name<input type="text" name="title" id="taskTitle" placeholder="What needs to be done?" required></label>
-        <label>Category<select name="category"><option>Personal</option><option>Work</option><option>Design</option><option>Health</option><option>Strategy</option></select></label>
-        <label>Priority<select name="priority"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
-        <label>Due date<input type="datetime-local" name="due_at"></label>
-        <label>Repeat<select name="recurrence"><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
+        <label>Category<select name="category" id="taskCategory"><option>Personal</option><option>Work</option><option>Design</option><option>Health</option><option>Finance</option><option>Strategy</option></select></label>
+        <label>Priority<select name="priority" id="taskPriority"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
+        <label>Due date<input type="datetime-local" name="due_at" id="taskDueAt"></label>
+        <label>Repeat<select name="recurrence" id="taskRecurrence"><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
         <div class="modal-actions">
           <button class="secondary-button modal-close" type="button">Cancel</button>
           <button class="primary-button" type="submit">Add task</button>

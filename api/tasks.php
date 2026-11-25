@@ -103,15 +103,15 @@ try {
             $existing = $pdo->prepare('SELECT status,title,priority,category FROM tasks WHERE id=:id AND user_id=:user_id');
             $existing->execute(['id' => $id, 'user_id' => $userId]);
             $task = $existing->fetch();
+            if (!$task) jsonResponse(['error' => 'Task not found'], 404);
             $statement = $pdo->prepare(
                 'UPDATE tasks SET status = :status,
                  completed_at = CASE WHEN :status = "completed" THEN COALESCE(completed_at, NOW()) ELSE NULL END
                  WHERE id = :id AND user_id = :user_id'
             );
             $statement->execute(['status' => $status, 'id' => $id, 'user_id' => $userId]);
-            if (!$task) jsonResponse(['error' => 'Task not found'], 404);
             auditEvent($pdo,$userId,'task.status_changed','task',$id);
-            if ($task && $task['status'] !== 'completed' && $status === 'completed') {
+            if ($task['status'] !== 'completed' && $status === 'completed') {
                 executeAutomationRules($pdo, $userId, 'task_completed', [
                     'category' => (string) $task['category'],
                     'priority' => (string) $task['priority'],
@@ -127,14 +127,18 @@ try {
             if (!$existing->fetch()) jsonResponse(['error' => 'Task not found'], 404);
             $statement = $pdo->prepare('UPDATE tasks SET title = :title WHERE id = :id AND user_id = :user_id');
             $statement->execute(['title' => $title, 'id' => $id, 'user_id' => $userId]);
+            auditEvent($pdo, $userId, 'task.title_changed', 'task', $id);
         } elseif (array_key_exists('due_at', $input)) {
             $dueAt = trim((string) $input['due_at']);
             $date = $dueAt === '' ? null : date_create($dueAt);
             if ($dueAt !== '' && $date === false) jsonResponse(['error' => 'Invalid due date'], 422);
+            $existing = $pdo->prepare('SELECT id FROM tasks WHERE id=:id AND user_id=:user_id');
+            $existing->execute(['id' => $id, 'user_id' => $userId]);
+            if (!$existing->fetch()) jsonResponse(['error' => 'Task not found'], 404);
             $statement = $pdo->prepare('UPDATE tasks SET due_at = :due_at, next_recurrence_at = :next_due_at WHERE id = :id AND user_id = :user_id');
             $value = $date ? $date->format('Y-m-d H:i:s') : null;
             $statement->execute(['due_at' => $value, 'next_due_at' => $value, 'id' => $id, 'user_id' => $userId]);
-            if ($statement->rowCount() === 0) jsonResponse(['error' => 'Task not found'], 404);
+            auditEvent($pdo, $userId, 'task.due_date_changed', 'task', $id);
         } elseif (array_key_exists('priority', $input)) {
             $priority = (string) $input['priority'];
             if (!in_array($priority, ['low', 'medium', 'high', 'urgent'], true)) {
@@ -147,13 +151,15 @@ try {
             $statement = $pdo->prepare('UPDATE tasks SET priority=:priority WHERE id=:id AND user_id=:user_id');
             $statement->execute(['priority' => $priority, 'id' => $id, 'user_id' => $userId]);
             auditEvent($pdo,$userId,'task.priority_changed','task',$id);
-            if ($task && $task['priority'] !== $priority) {
+            if ($task['priority'] !== $priority) {
                 executeAutomationRules($pdo, $userId, 'priority_changed', [
                     'category' => (string) $task['category'],
                     'priority' => $priority,
                     'title' => (string) $task['title'],
                 ]);
             }
+        } else {
+            jsonResponse(['error' => 'No valid task fields supplied to update'], 422);
         }
         jsonResponse(['message' => 'Task updated']);
     }
@@ -161,9 +167,12 @@ try {
     if ($method === 'DELETE') {
         $id = (int) ($input['id'] ?? 0);
         if ($id < 1) jsonResponse(['error' => 'Valid task ID is required'], 422);
+        $existing = $pdo->prepare('SELECT id FROM tasks WHERE id=:id AND user_id=:user_id');
+        $existing->execute(['id' => $id, 'user_id' => $userId]);
+        if (!$existing->fetch()) jsonResponse(['error' => 'Task not found'], 404);
         $statement = $pdo->prepare('DELETE FROM tasks WHERE id = :id AND user_id = :user_id');
         $statement->execute(['id' => $id, 'user_id' => $userId]);
-        if ($statement->rowCount() !== 1) jsonResponse(['error' => 'Task not found'], 404);
+        auditEvent($pdo, $userId, 'task.deleted', 'task', $id);
         jsonResponse(['message' => 'Task deleted']);
     }
 

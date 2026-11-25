@@ -195,6 +195,12 @@ button { cursor: pointer; }
 .note-cyan { background: linear-gradient(145deg, rgba(87,200,207,.11), rgba(87,200,207,.025)); }
 .note-rose { background: linear-gradient(145deg, rgba(217,139,163,.11), rgba(217,139,163,.025)); }
 .pin { position: absolute; right: 12px; top: 13px; color: rgba(255,255,255,.35); font-size: 8px; }
+.note-delete { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; border-radius: 6px; opacity: 0; transition: opacity 160ms ease, color 160ms ease, background 160ms ease; z-index: 2; }
+.note-card:hover .note-delete { opacity: 0.65; }
+.note-delete:hover { opacity: 1; color: var(--rose); background: rgba(255,255,255,.08); }
+.note-card:has(.pin) .note-delete { right: 26px; }
+.weather-widget[role="button"] { cursor: pointer; user-select: none; transition: 180ms ease; }
+.weather-widget[role="button"]:hover { border-color: rgba(87,200,207,.35); transform: translateY(-1px); }
 
 .completion-ring { --progress: 0; width: 112px; height: 112px; display: grid; place-items: center; margin: 15px auto 13px; border-radius: 50%; background: conic-gradient(var(--violet) calc(var(--progress) * 1%), rgba(255,255,255,.06) 0); box-shadow: 0 0 30px rgba(157,135,255,.06); }
 .ring-inner { width: 92px; height: 92px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 50%; background: #151822; }
@@ -403,6 +409,115 @@ button { cursor: pointer; }
   .command-results { max-height: 56vh; }
   .command-footer { align-items: flex-start; flex-direction: column; justify-content: center; padding-block: 9px; }
   .topbar-actions .search-button { width: 34px; height: 34px; display: grid; }
+
+/* =========================================================
+   Smart NLP input
+   ========================================================= */
+.smart-input-wrap { margin-bottom: 4px; }
+.smart-label { position: relative; }
+.smart-badge {
+  display: inline-flex; align-items: center; margin-left: 6px;
+  padding: 1px 6px; border-radius: 20px;
+  background: linear-gradient(90deg, rgba(157,135,255,.22), rgba(87,200,207,.18));
+  color: var(--violet); font-size: 8px; font-weight: 900; letter-spacing: 0.5px;
+  vertical-align: middle;
+}
+.parse-preview {
+  margin: 5px 0 0;
+  min-height: 18px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(157,135,255,.065);
+  border: 1px solid rgba(157,135,255,.14);
+  color: #b4a9f8;
+  font-size: 10px;
+  line-height: 1.5;
+  transition: opacity 180ms ease;
+}
+.parse-preview:empty { display: none; }
+.parse-preview strong { color: var(--cyan); }
+
+/* =========================================================
+   Task panel controls (filter + view toggle)
+   ========================================================= */
+.task-panel-controls { display: flex; align-items: center; gap: 8px; }
+.view-toggle {
+  display: flex; align-items: center; gap: 2px;
+  border: 1px solid var(--border); border-radius: 9px;
+  padding: 2px; background: rgba(255,255,255,.025);
+}
+.view-btn {
+  width: 28px; height: 26px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--muted); font-size: 13px;
+  cursor: pointer; transition: 160ms ease;
+}
+.view-btn:hover { color: var(--text); background: rgba(255,255,255,.045); }
+.view-btn.active { background: rgba(157,135,255,.18); color: var(--violet); }
+
+/* =========================================================
+   Kanban board
+   ========================================================= */
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+  min-height: 280px;
+}
+.kanban-col {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--border); border-radius: 13px;
+  background: rgba(255,255,255,.018);
+  overflow: hidden;
+}
+.kanban-col-header {
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 12px 9px;
+  border-bottom: 1px solid rgba(255,255,255,.045);
+  background: rgba(255,255,255,.018);
+}
+.kanban-col-header h3 { margin: 0; flex: 1; font-size: 11px; font-weight: 800; letter-spacing: 0.1px; }
+.kanban-col-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto;
+}
+.kanban-col-dot.violet { background: var(--violet); box-shadow: 0 0 7px var(--violet); }
+.kanban-col-dot.cyan   { background: var(--cyan);   box-shadow: 0 0 7px var(--cyan); }
+.kanban-col-dot.green  { background: var(--green);  box-shadow: 0 0 7px var(--green); }
+.kanban-col-dot.muted  { background: var(--muted-2); }
+.kanban-col-count {
+  min-width: 18px; height: 18px; display: grid; place-items: center;
+  border-radius: 6px; background: rgba(255,255,255,.07);
+  color: var(--muted); font-size: 9.5px; font-weight: 700;
+}
+.kanban-cards {
+  flex: 1; display: flex; flex-direction: column; gap: 7px;
+  padding: 8px; overflow-y: auto; min-height: 60px;
+}
+.kanban-card {
+  padding: 10px 11px; border: 1px solid var(--border);
+  border-radius: 10px; background: rgba(255,255,255,.025);
+  cursor: grab; user-select: none;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+.kanban-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.18); border-color: rgba(255,255,255,.1); }
+.kanban-card:active { cursor: grabbing; }
+.kanban-card-title { font-size: 11.5px; font-weight: 700; margin: 0 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kanban-card-meta { display: flex; align-items: center; gap: 6px; }
+.kanban-card-meta .category { font-size: 9px; color: #aaa1cf; }
+.kanban-card-meta .priority { font-size: 7.5px; border-radius: 5px; padding: 2px 5px; font-weight: 800; text-transform: capitalize; }
+.kanban-card.is-dragging { opacity: .4; transform: scale(.97); }
+.kanban-col.drag-over .kanban-cards {
+  outline: 2px dashed rgba(157,135,255,.5);
+  outline-offset: -2px;
+  background: rgba(157,135,255,.05);
+  border-radius: 9px;
+}
+@media (max-width: 860px) {
+  .kanban-board { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 540px) {
+  .kanban-board { grid-template-columns: 1fr; }
+}
   .primary-button { height: 38px; padding-inline: 12px; }
   .dashboard-grid { grid-template-columns: 1fr; grid-template-areas: "clock" "life" "tasks" "notes" "stats" "activity"; }
   .clock-panel, .task-panel, .stats-panel, .notes-panel, .activity-panel { min-height: auto; }

@@ -73,31 +73,139 @@
   const weatherConditions = document.getElementById("weatherConditions");
   const weatherLocation = document.getElementById("weatherLocation");
 
+  const weatherIcons = {
+    "Clear": "☀️",
+    "Mainly Clear": "🌤️",
+    "Partly Cloudy": "⛅",
+    "Partly cloudy": "⛅",
+    "Overcast": "☁️",
+    "Fog": "🌫️",
+    "Depositing Rime Fog": "🌫️",
+    "Light Drizzle": "🌦️",
+    "Moderate Drizzle": "🌦️",
+    "Dense Drizzle": "🌧️",
+    "Drizzle": "🌦️",
+    "Light Freezing Drizzle": "🌨️",
+    "Dense Freezing Drizzle": "🌨️",
+    "Freezing Drizzle": "🌨️",
+    "Slight Rain": "🌧️",
+    "Moderate Rain": "🌧️",
+    "Heavy Rain": "🌧️",
+    "Rain": "🌧️",
+    "Light Freezing Rain": "🌧️",
+    "Heavy Freezing Rain": "🌧️",
+    "Freezing Rain": "🌧️",
+    "Slight Snow": "❄️",
+    "Moderate Snow": "❄️",
+    "Heavy Snow": "❄️",
+    "Snow": "❄️",
+    "Snow Grains": "❄️",
+    "Slight Rain Showers": "🌦️",
+    "Moderate Rain Showers": "🌧️",
+    "Violent Rain Showers": "⛈️",
+    "Rain Showers": "🌧️",
+    "Slight Snow Showers": "🌨️",
+    "Heavy Snow Showers": "🌨️",
+    "Snow Showers": "🌨️",
+    "Thunderstorm": "⛈️",
+    "Thunderstorm with Hail": "⛈️",
+    "Heavy Thunderstorm": "⛈️",
+    "Unknown": "🌡️"
+  };
+
+  const apiBasePath = window.location.pathname.startsWith("/personal-os") ? "/personal-os/api" : "/api";
+
+  let currentTempC = null;
+  let tempUnit = localStorage.getItem("personal-os-temp-unit") || "C";
+
+  function renderTemperature() {
+    if (!weatherTemperature || currentTempC === null) return;
+    if (tempUnit === "F") {
+      const f = (currentTempC * 9 / 5) + 32;
+      weatherTemperature.textContent = `${f.toFixed(1)}°F`;
+    } else {
+      weatherTemperature.textContent = `${currentTempC.toFixed(1)}°C`;
+    }
+  }
+
+  const weatherWidget = document.getElementById("weatherWidget");
+  if (weatherWidget) {
+    weatherWidget.addEventListener("click", () => {
+      if (currentTempC === null) return;
+      tempUnit = tempUnit === "C" ? "F" : "C";
+      localStorage.setItem("personal-os-temp-unit", tempUnit);
+      renderTemperature();
+      showToast(`Temperature unit: °${tempUnit}`);
+    });
+    weatherWidget.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        weatherWidget.click();
+      }
+    });
+  }
+
+  function updateDashboardStats() {
+    const allRows = Array.from(document.querySelectorAll(".task-row"));
+    const totalTasks = allRows.length;
+    const completedTasks = allRows.filter((r) => r.classList.contains("is-complete") || r.dataset.status === "completed").length;
+    const pendingTasks = Math.max(0, totalTasks - completedTasks);
+    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    const sidebarCount = document.getElementById("sidebarTaskCount");
+    if (sidebarCount) sidebarCount.textContent = String(pendingTasks);
+
+    const headerCount = document.getElementById("taskHeaderCount");
+    if (headerCount) headerCount.textContent = String(totalTasks);
+
+    const ring = document.getElementById("completionRing");
+    if (ring) ring.style.setProperty("--progress", String(completionRate));
+
+    const ringText = document.getElementById("completionRateText");
+    if (ringText) ringText.textContent = `${completionRate}%`;
+
+    const statCompleted = document.getElementById("statCompletedTasks");
+    if (statCompleted) statCompleted.textContent = String(completedTasks);
+
+    const statActive = document.getElementById("statActiveTasks");
+    if (statActive) statActive.textContent = String(pendingTasks);
+
+    const statNotes = document.getElementById("statTotalNotes");
+    if (statNotes) {
+      const notesCount = document.querySelectorAll(".note-card:not(.empty-state)").length;
+      statNotes.textContent = String(notesCount);
+    }
+  }
+
   async function fetchWeather() {
     if (!weatherTemperature || !weatherConditions || !weatherIcon) return;
     try {
-      const response = await fetch("/personal-os/api/weather.php", {
+      const response = await fetch(`${apiBasePath}/weather.php`, {
         headers: { Accept: "application/json" },
         cache: "no-store"
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Weather unavailable");
 
-      const icons = {
-        Clear: "☀️",
-        "Partly cloudy": "🌤️",
-        Overcast: "☁️",
-        Fog: "🌫️",
-        Drizzle: "🌦️",
-        Rain: "🌧️",
-        Snow: "❄️",
-        Thunderstorm: "⛈️",
-        Unknown: "🌡️"
-      };
-      weatherTemperature.textContent = `${Number(payload.temperature_c).toFixed(1)}°C`;
-      weatherConditions.textContent = `${payload.conditions} · ${Number(payload.wind_speed_kmh).toFixed(0)} km/h wind`;
-      weatherIcon.textContent = icons[payload.conditions] || icons.Unknown;
-      if (weatherLocation && payload.location) weatherLocation.textContent = payload.location.replace(/_/g, " ");
+      const temp = Number(payload.temperature_c);
+      if (!isNaN(temp)) {
+        currentTempC = temp;
+        renderTemperature();
+      } else {
+        weatherTemperature.textContent = "--°";
+      }
+
+      const windSpeed = Number(payload.wind_speed_kmh);
+      const windInfo = !isNaN(windSpeed) ? ` · ${windSpeed.toFixed(0)} km/h wind` : "";
+      weatherConditions.textContent = `${payload.conditions || "Current weather"}${windInfo}`;
+
+      const emoji = payload.emoji || weatherIcons[payload.conditions] || weatherIcons.Unknown;
+      weatherIcon.textContent = emoji;
+      weatherIcon.setAttribute("title", payload.conditions || "Weather");
+
+      if (weatherLocation && payload.location) {
+        weatherLocation.textContent = payload.location.replace(/_/g, " ");
+      }
     } catch (error) {
       weatherConditions.textContent = error.message || "Weather unavailable";
       weatherIcon.textContent = "🌡️";
@@ -110,35 +218,91 @@
   const serverInfoText = document.getElementById("serverInfoText");
 
   async function fetchSystemVitals() {
-    if (!diskUsageProgress || !diskUsageBar || !diskUsageText || !serverInfoText) return;
+    if (!diskUsageProgress && !diskUsageBar && !diskUsageText && !serverInfoText) return;
     try {
-      const response = await fetch("/personal-os/api/sysinfo.php", {
+      const response = await fetch(`${apiBasePath}/sysinfo.php`, {
         headers: { Accept: "application/json" },
         cache: "no-store"
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "System metrics unavailable");
 
-      const freeGb = Number(payload.disk_free_bytes) / (1024 ** 3);
-      const totalGb = Number(payload.disk_total_bytes) / (1024 ** 3);
-      const usedPercent = Math.max(0, Math.min(100, Number(payload.disk_used_percent)));
-      diskUsageBar.style.width = `${usedPercent}%`;
-      diskUsageProgress.setAttribute("aria-valuenow", usedPercent.toFixed(1));
-      diskUsageProgress.setAttribute("aria-valuetext", `${usedPercent.toFixed(1)}% used`);
-      diskUsageText.textContent = `${freeGb.toFixed(1)} GB free / ${totalGb.toFixed(1)} GB total`;
-      serverInfoText.textContent = `PHP ${payload.php_version} · ${payload.server_os}`;
+      const freeGb = payload.disk_free_gb ?? (Number(payload.disk_free_bytes) / (1024 ** 3)).toFixed(1);
+      const totalGb = payload.disk_total_gb ?? (Number(payload.disk_total_bytes) / (1024 ** 3)).toFixed(1);
+      const usedPercent = Math.max(0, Math.min(100, Number(payload.disk_used_percent ?? 0)));
+
+      if (diskUsageBar) {
+        diskUsageBar.style.width = `${usedPercent}%`;
+      }
+      if (diskUsageProgress) {
+        diskUsageProgress.style.setProperty("--progress", `${usedPercent}%`);
+        diskUsageProgress.setAttribute("aria-valuenow", usedPercent.toFixed(1));
+        diskUsageProgress.setAttribute("aria-valuetext", `${usedPercent.toFixed(1)}% used`);
+      }
+      if (diskUsageText) {
+        diskUsageText.textContent = payload.disk_usage_formatted || `${freeGb} GB free / ${totalGb} GB total`;
+      }
+      if (serverInfoText) {
+        serverInfoText.textContent = `PHP ${payload.php_version} · ${payload.server_os}`;
+      }
     } catch (error) {
-      diskUsageText.textContent = error.message || "System metrics unavailable";
-      serverInfoText.textContent = "Server information unavailable";
+      if (diskUsageText) diskUsageText.textContent = error.message || "System metrics unavailable";
+      if (serverInfoText) serverInfoText.textContent = "Server information unavailable";
     }
   }
 
+  async function fetchTasks() {
+    if (!taskList) return;
+    try {
+      const response = await fetch(`${apiBasePath}/tasks.php`, {
+        headers: { Accept: "application/json" },
+        cache: "no-store"
+      });
+      if (!response.ok) return;
+      await response.json();
+    } catch (_) {
+      // Keep SSR render
+    }
+  }
+
+  async function fetchNotes() {
+    const notesGrid = document.querySelector(".notes-grid");
+    if (!notesGrid) return;
+    try {
+      const response = await fetch(`${apiBasePath}/notes.php`, {
+        headers: { Accept: "application/json" },
+        cache: "no-store"
+      });
+      if (!response.ok) return;
+      await response.json();
+    } catch (_) {
+      // Keep SSR render
+    }
+  }
+
+  // Initial page load fetchers & stats calculation
+  if (taskList) fetchTasks();
+  if (document.querySelector(".notes-grid")) fetchNotes();
+  if (weatherTemperature) fetchWeather();
+  if (diskUsageProgress || diskUsageBar || diskUsageText || serverInfoText) fetchSystemVitals();
+  updateDashboardStats();
+
+  // Network lifecycle synchronization
+  window.addEventListener("online", () => {
+    showToast("Back online — live sync active");
+    if (weatherTemperature) fetchWeather();
+    if (diskUsageProgress) fetchSystemVitals();
+    if (taskList) fetchTasks();
+  });
+  window.addEventListener("offline", () => {
+    showToast("Offline mode — local cache active");
+  });
+
+  // Periodic background refresh intervals: weather every 30 minutes, system vitals every 5 minutes
   if (weatherTemperature) {
-    fetchWeather();
     window.setInterval(fetchWeather, 30 * 60 * 1000);
   }
-  if (diskUsageProgress) {
-    fetchSystemVitals();
+  if (diskUsageProgress || diskUsageBar || diskUsageText || serverInfoText) {
     window.setInterval(fetchSystemVitals, 5 * 60 * 1000);
   }
 
@@ -198,6 +362,8 @@
       const row = document.createElement("article");
       row.className = "task-row";
       row.dataset.status = "todo";
+      row.dataset.category = category;
+      row.dataset.priority = priority;
       row.innerHTML =
         '<button class="task-check" type="button" aria-label="Toggle task">' +
         '<svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></button>' +
@@ -219,7 +385,7 @@
         submitButton.textContent = "Adding...";
       }
 
-      fetch("/personal-os/api/tasks.php", {
+      fetch(`${apiBasePath}/tasks.php`, {
         method: "POST",
         headers: csrfHeaders(),
         body: JSON.stringify({ title, category, priority, due_at: dueAt, recurrence })
@@ -231,6 +397,7 @@
           taskForm.reset();
           closeModal();
           showToast("Task added");
+          updateDashboardStats();
           if (submitButton) {
             submitButton.disabled = false;
             submitButton.textContent = "Add task";
@@ -239,6 +406,7 @@
         .catch((error) => {
           row.remove();
           showToast(error.message);
+          updateDashboardStats();
           if (submitButton) {
             submitButton.disabled = false;
             submitButton.textContent = "Add task";
@@ -257,17 +425,20 @@
       const nextStatus = row.classList.contains("is-complete") ? "todo" : "completed";
       row.classList.toggle("is-complete");
       row.dataset.status = row.classList.contains("is-complete") ? "completed" : "todo";
+      updateDashboardStats();
       if (row.dataset.taskId) {
-        fetch("/personal-os/api/tasks.php", {
+        fetch(`${apiBasePath}/tasks.php`, {
           method: "PATCH",
           headers: csrfHeaders(),
           body: JSON.stringify({ id: Number(row.dataset.taskId), status: nextStatus })
         }).then(async (response) => {
           const payload = await response.json();
           if (!response.ok) throw new Error(payload.error || "Could not save task status");
+          updateKanbanCard(row.dataset.taskId, nextStatus);
         }).catch((error) => {
           row.classList.toggle("is-complete", wasComplete);
           row.dataset.status = previousStatus;
+          updateDashboardStats();
           showToast(error.message);
         });
       }
@@ -279,13 +450,14 @@
       if (menu) {
         const row = menu.closest(".task-row");
         if (!window.confirm("Delete this task?")) return;
-        fetch("/personal-os/api/tasks.php", {
+        fetch(`${apiBasePath}/tasks.php`, {
           method: "DELETE",
           headers: csrfHeaders(),
           body: JSON.stringify({ id: Number(row.dataset.taskId) })
         }).then((response) => {
           if (!response.ok) throw new Error("Could not delete task");
           row.remove();
+          updateDashboardStats();
           showToast("Task deleted");
         }).catch((error) => showToast(error.message));
       }
@@ -342,13 +514,12 @@
     noteForm.addEventListener("submit", (event) => {
       event.preventDefault();
       const data = new FormData(noteForm);
-      const payload = {
-        title: String(data.get("title") || "").trim(),
-        content: String(data.get("content") || "").trim(),
-        color: String(data.get("color") || "violet"),
-        is_pinned: data.has("is_pinned")
-      };
-      fetch("/personal-os/api/notes.php", {
+      const title = String(data.get("title") || "").trim();
+      const content = String(data.get("content") || "").trim();
+      const color = String(data.get("color") || "violet");
+      const is_pinned = data.has("is_pinned");
+      const payload = { title, content, color, is_pinned };
+      fetch(`${apiBasePath}/notes.php`, {
         method: "POST",
         headers: csrfHeaders(),
         body: JSON.stringify(payload)
@@ -356,9 +527,68 @@
         .then(async (response) => {
           const result = await response.json();
           if (!response.ok) throw new Error(result.error || "Could not add note");
+          const notesGrid = document.querySelector(".notes-grid");
+          if (notesGrid) {
+            const emptyState = notesGrid.querySelector(".empty-state");
+            if (emptyState) emptyState.remove();
+            const noteCard = document.createElement("article");
+            noteCard.className = `note-card note-${color}`;
+            noteCard.id = `note-${result.id}`;
+            noteCard.dataset.noteId = String(result.id);
+            if (is_pinned) {
+              const pin = document.createElement("span");
+              pin.className = "pin";
+              pin.setAttribute("aria-label", "Pinned");
+              pin.textContent = "◆";
+              noteCard.appendChild(pin);
+            }
+            const delBtn = document.createElement("button");
+            delBtn.className = "note-delete";
+            delBtn.type = "button";
+            delBtn.setAttribute("aria-label", "Delete note");
+            delBtn.setAttribute("title", "Delete note");
+            delBtn.textContent = "×";
+            noteCard.appendChild(delBtn);
+
+            const h3 = document.createElement("h3");
+            h3.textContent = title || "Untitled";
+            const p = document.createElement("p");
+            p.textContent = content;
+            const time = document.createElement("time");
+            time.textContent = "Just now";
+            noteCard.appendChild(h3);
+            noteCard.appendChild(p);
+            noteCard.appendChild(time);
+            notesGrid.prepend(noteCard);
+          }
           noteForm.reset();
           closeNoteModal();
-          window.location.reload();
+          showToast("Note saved");
+          updateDashboardStats();
+        })
+        .catch((error) => showToast(error.message));
+    });
+  }
+
+  const notesGrid = document.querySelector(".notes-grid");
+  if (notesGrid) {
+    notesGrid.addEventListener("click", (event) => {
+      const deleteButton = event.target.closest(".note-delete");
+      if (!deleteButton) return;
+      const card = deleteButton.closest(".note-card");
+      if (!card || !card.dataset.noteId) return;
+      if (!window.confirm("Delete this note?")) return;
+
+      fetch(`${apiBasePath}/notes.php`, {
+        method: "DELETE",
+        headers: csrfHeaders(),
+        body: JSON.stringify({ id: Number(card.dataset.noteId) })
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("Could not delete note");
+          card.remove();
+          updateDashboardStats();
+          showToast("Note deleted");
         })
         .catch((error) => showToast(error.message));
     });
@@ -502,7 +732,7 @@
       const controller = new AbortController();
       remoteSearchController = controller;
       try {
-        const response = await fetch("/personal-os/api/search.php", {
+        const response = await fetch(`${apiBasePath}/search.php`, {
           method: "POST",
           headers: { ...csrfHeaders(), Accept: "application/json" },
           body: JSON.stringify({ query: remoteSearchQuery }),
@@ -894,7 +1124,7 @@
       const taskId = event.dataTransfer.getData("text/plain");
       if (!taskId) return;
       const date = day.dataset.date;
-      fetch("/personal-os/api/tasks.php", {
+      fetch(`${apiBasePath}/tasks.php`, {
         method: "PATCH",
         headers: csrfHeaders(),
         body: JSON.stringify({ id: Number(taskId), due_at: `${date} 09:00:00` })
@@ -977,8 +1207,7 @@
             window.clearInterval(ticker);
             ticker = null;
             sessionStorage.removeItem("personal-os-focus");
-            sessionStorage.removeItem("personal-os-focus");
-            if (sessionId) fetch("/personal-os/api/focus.php",{method:"PATCH",headers:csrfHeaders(),body:JSON.stringify({id:sessionId,status:"completed"})}).catch(()=>{});
+            if (sessionId) fetch(`${apiBasePath}/focus.php`,{method:"PATCH",headers:csrfHeaders(),body:JSON.stringify({id:sessionId,status:"completed"})}).catch(()=>{});
           }
         }, 1000);
       }
@@ -993,7 +1222,7 @@
     resetFocus?.addEventListener("click", () => {
       window.clearInterval(ticker);
       ticker = null;
-      if (sessionId) fetch("/personal-os/api/focus.php",{method:"PATCH",headers:csrfHeaders(),body:JSON.stringify({id:sessionId,status:"cancelled"})}).catch(()=>{});
+      if (sessionId) fetch(`${apiBasePath}/focus.php`,{method:"PATCH",headers:csrfHeaders(),body:JSON.stringify({id:sessionId,status:"cancelled"})}).catch(()=>{});
       sessionStorage.removeItem("personal-os-focus");
       remaining = Number(durationSelect?.value || 25) * 60;
       renderTime();
@@ -1004,7 +1233,7 @@
       if (ticker) return;
       remaining = Number(durationSelect?.value || 25) * 60;
       renderTime();
-      fetch("/personal-os/api/focus.php", {
+      fetch(`${apiBasePath}/focus.php`, {
         method:"POST",
         headers:csrfHeaders(),
         body:JSON.stringify({duration_minutes:Number(durationSelect?.value || 25),task_id:Number(taskSelect?.value || 0)})
@@ -1019,7 +1248,7 @@
           if (remaining <= 0) {
             window.clearInterval(ticker);
             ticker = null;
-            if (sessionId) fetch("/personal-os/api/focus.php",{method:"PATCH",headers:csrfHeaders(),body:JSON.stringify({id:sessionId,status:"completed"})}).catch(()=>{});
+            if (sessionId) fetch(`${apiBasePath}/focus.php`,{method:"PATCH",headers:csrfHeaders(),body:JSON.stringify({id:sessionId,status:"completed"})}).catch(()=>{});
             if ("Notification" in window && Notification.permission === "granted") {
               new Notification("Focus session complete",{body:"Take a short break."});
             }
@@ -1044,7 +1273,7 @@
       showToast("Browser reminders enabled");
       const checkReminders = async () => {
         try {
-          const response = await fetch("/personal-os/api/reminders.php");
+          const response = await fetch(`${apiBasePath}/reminders.php`);
           if (!response.ok) return;
           const payload = await response.json();
           const now = Date.now();
@@ -1052,7 +1281,7 @@
             const due = new Date(reminder.remind_at).getTime();
             if (!reminder.is_sent && due <= now) {
               new Notification("Personal OS reminder", { body: reminder.title });
-              fetch("/personal-os/api/reminders.php", {
+              fetch(`${apiBasePath}/reminders.php`, {
                 method: "PATCH",
                 headers: csrfHeaders(),
                 body: JSON.stringify({ id: reminder.id })
@@ -1067,4 +1296,394 @@
       window.setInterval(checkReminders, 60 * 1000);
     });
   }
+
+  // =========================================================
+  // NLP SMART TASK PARSER
+  // =========================================================
+
+  const smartInput = document.getElementById("smartInput");
+  const parsePreview = document.getElementById("parsePreview");
+  const taskCategory = document.getElementById("taskCategory");
+  const taskPriority = document.getElementById("taskPriority");
+  const taskDueAt = document.getElementById("taskDueAt");
+  const taskRecurrence = document.getElementById("taskRecurrence");
+
+  const WEEKDAYS = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+  const MONTH_NAMES = {
+    jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11,
+    january:0,february:1,march:2,april:3,june:5,july:6,august:7,september:8,
+    october:9,november:10,december:11
+  };
+
+  function parseNaturalLanguageTask(raw) {
+    let text = raw;
+    const result = { title: "", category: null, priority: null, dueAt: null, recurrence: null };
+
+    // Extract #category
+    const catMatch = text.match(/#([a-z0-9_-]+)/i);
+    if (catMatch) {
+      result.category = catMatch[1].charAt(0).toUpperCase() + catMatch[1].slice(1).toLowerCase();
+      text = text.replace(catMatch[0], "").trim();
+    }
+
+    // Extract !priority or priority keywords
+    const prioMap = { urgent: "urgent", high: "high", medium: "medium", med: "medium", low: "low" };
+    const bangMatch = text.match(/!(urgent|high|medium|med|low)/i);
+    if (bangMatch) {
+      result.priority = prioMap[bangMatch[1].toLowerCase()] || "medium";
+      text = text.replace(bangMatch[0], "").trim();
+    } else {
+      const wordPrio = text.match(/\b(urgent|critical|asap|high.priority|low.priority)\b/i);
+      if (wordPrio) {
+        const w = wordPrio[1].toLowerCase();
+        result.priority = w === "urgent" || w === "critical" || w === "asap" ? "urgent"
+          : w.startsWith("high") ? "high" : "low";
+        text = text.replace(wordPrio[0], "").trim();
+      }
+    }
+
+    // Extract recurrence
+    const recurPatterns = [
+      { re: /\b(every\s+day|daily)\b/i, val: "daily" },
+      { re: /\b(every\s+week|weekly)\b/i, val: "weekly" },
+      { re: /\b(every\s+month|monthly)\b/i, val: "monthly" }
+    ];
+    for (const { re, val } of recurPatterns) {
+      if (re.test(text)) {
+        result.recurrence = val;
+        text = text.replace(re, "").trim();
+        break;
+      }
+    }
+
+    // Extract time (e.g., "5pm", "at 17:00", "9am")
+    let timeH = 9, timeM = 0, hasTime = false;
+    const timeMatch = text.match(/\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b|\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+    if (timeMatch) {
+      const hStr = timeMatch[1] || timeMatch[4];
+      const mStr = timeMatch[2] || timeMatch[5];
+      const meridiem = (timeMatch[3] || timeMatch[6] || "").toLowerCase();
+      let h = parseInt(hStr, 10);
+      const m = mStr ? parseInt(mStr, 10) : 0;
+      if (meridiem === "pm" && h !== 12) h += 12;
+      if (meridiem === "am" && h === 12) h = 0;
+      timeH = h; timeM = m; hasTime = true;
+      text = text.replace(timeMatch[0], "").trim();
+    }
+
+    function toIso(d) {
+      const yr = d.getFullYear();
+      const mo = String(d.getMonth() + 1).padStart(2, "0");
+      const dy = String(d.getDate()).padStart(2, "0");
+      const hh = String(timeH).padStart(2, "0");
+      const mm = String(timeM).padStart(2, "0");
+      return `${yr}-${mo}-${dy}T${hh}:${mm}`;
+    }
+
+    const now = new Date();
+
+    // Strip leading "by " before date phrases
+    text = text.replace(/\bby\s+/gi, "");
+
+    // "today"
+    if (/\btoday\b/i.test(text)) {
+      result.dueAt = toIso(now);
+      text = text.replace(/\btoday\b/i, "").trim();
+    }
+    // "tomorrow"
+    else if (/\btomorrow\b/i.test(text)) {
+      const d = new Date(now); d.setDate(d.getDate() + 1);
+      result.dueAt = toIso(d); text = text.replace(/\btomorrow\b/i, "").trim();
+    }
+    // "next week"
+    else if (/\bnext\s+week\b/i.test(text)) {
+      const d = new Date(now); d.setDate(d.getDate() + 7);
+      result.dueAt = toIso(d); text = text.replace(/\bnext\s+week\b/i, "").trim();
+    }
+    // "next month"
+    else if (/\bnext\s+month\b/i.test(text)) {
+      const d = new Date(now); d.setMonth(d.getMonth() + 1);
+      result.dueAt = toIso(d); text = text.replace(/\bnext\s+month\b/i, "").trim();
+    }
+    // Weekday names e.g. "Friday"
+    else {
+      const dayMatch = text.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
+      if (dayMatch) {
+        const targetDay = WEEKDAYS.indexOf(dayMatch[1].toLowerCase());
+        const d = new Date(now);
+        const curDay = d.getDay();
+        let diff = targetDay - curDay;
+        if (diff <= 0) diff += 7;
+        d.setDate(d.getDate() + diff);
+        result.dueAt = toIso(d);
+        text = text.replace(dayMatch[0], "").trim();
+      }
+      // Month + day e.g. "Dec 5", "December 15"
+      else {
+        const monthDayMatch = text.match(/\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})\b/i);
+        if (monthDayMatch) {
+          const monthIdx = MONTH_NAMES[monthDayMatch[1].toLowerCase().slice(0, 3)];
+          const day = parseInt(monthDayMatch[2], 10);
+          const d = new Date(now.getFullYear(), monthIdx, day, timeH, timeM);
+          if (d < now) d.setFullYear(d.getFullYear() + 1);
+          result.dueAt = toIso(d);
+          text = text.replace(monthDayMatch[0], "").trim();
+        }
+        // ISO or MM/DD
+        else {
+          const isoMatch = text.match(/\b(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\b/);
+          if (isoMatch) {
+            const d = new Date(isoMatch[1].replace(/(\d+)\/(\d+)(?:\/(\d+))?/, (_, m, day, yr) => {
+              const y = yr ? (yr.length === 2 ? "20" + yr : yr) : now.getFullYear();
+              return `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+            }));
+            if (!isNaN(d.getTime())) { result.dueAt = toIso(d); }
+            text = text.replace(isoMatch[0], "").trim();
+          }
+        }
+      }
+    }
+
+    // If a time was given but no date matched yet, assume today
+    if (hasTime && !result.dueAt) {
+      result.dueAt = toIso(now);
+    }
+
+    result.title = text.replace(/\s{2,}/g, " ").trim();
+    return result;
+  }
+
+  function formatParsedPreview(parsed) {
+    const parts = [];
+    if (parsed.dueAt) {
+      const d = new Date(parsed.dueAt.replace("T", " "));
+      const label = new Intl.DateTimeFormat([], { weekday:"short", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" }).format(d);
+      parts.push(`📅 <strong>${label}</strong>`);
+    }
+    if (parsed.priority) parts.push(`⚡ <strong>${parsed.priority}</strong>`);
+    if (parsed.category) parts.push(`# <strong>${parsed.category}</strong>`);
+    if (parsed.recurrence) parts.push(`🔁 <strong>${parsed.recurrence}</strong>`);
+    return parts.join(" &nbsp;·&nbsp; ");
+  }
+
+  function applyParsedToForm(parsed) {
+    if (parsed.title && taskTitle) taskTitle.value = parsed.title;
+    if (parsed.category && taskCategory) {
+      const opt = Array.from(taskCategory.options).find(
+        (o) => o.value.toLowerCase() === parsed.category.toLowerCase() ||
+               o.text.toLowerCase() === parsed.category.toLowerCase()
+      );
+      if (opt) taskCategory.value = opt.value;
+    }
+    if (parsed.priority && taskPriority) taskPriority.value = parsed.priority;
+    if (parsed.dueAt && taskDueAt) taskDueAt.value = parsed.dueAt;
+    if (parsed.recurrence && taskRecurrence) taskRecurrence.value = parsed.recurrence;
+  }
+
+  if (smartInput && parsePreview) {
+    smartInput.addEventListener("input", () => {
+      const raw = smartInput.value.trim();
+      if (!raw) { parsePreview.innerHTML = ""; return; }
+      const parsed = parseNaturalLanguageTask(raw);
+      const preview = formatParsedPreview(parsed);
+      parsePreview.innerHTML = preview || "";
+      applyParsedToForm(parsed);
+    });
+    // Clear smart input when modal closes
+    document.addEventListener("keydown", (evt) => {
+      if (evt.key === "Escape" && smartInput) { smartInput.value = ""; parsePreview.innerHTML = ""; }
+    });
+    document.querySelectorAll(".modal-close").forEach((btn) => {
+      btn.addEventListener("click", () => { if (smartInput) { smartInput.value = ""; parsePreview.innerHTML = ""; }});
+    });
+  }
+
+  // =========================================================
+  // KANBAN BOARD VIEW
+  // =========================================================
+
+  const listViewBtn = document.getElementById("listViewBtn");
+  const boardViewBtn = document.getElementById("boardViewBtn");
+  const kanbanBoard = document.getElementById("kanbanBoard");
+  let draggedTaskId = null;
+
+  const STATUS_COL_LABELS = { todo: "todo", in_progress: "in_progress", completed: "completed", archived: "archived" };
+
+  function buildKanbanCard(row) {
+    const title = row.querySelector("h3")?.textContent.trim() || "Untitled";
+    const category = row.querySelector(".category")?.textContent.trim() || "";
+    const priority = row.querySelector(".priority")?.textContent.trim() || "";
+    const priorityClass = row.querySelector(".priority")?.className.replace("priority", "").trim() || "";
+    const taskId = row.dataset.taskId || "";
+
+    const card = document.createElement("article");
+    card.className = `kanban-card${row.classList.contains("is-complete") ? " is-complete" : ""}`;
+    card.setAttribute("draggable", "true");
+    card.dataset.taskId = taskId;
+    card.setAttribute("role", "listitem");
+    card.setAttribute("aria-label", title);
+
+    const h = document.createElement("p");
+    h.className = "kanban-card-title";
+    h.textContent = title;
+
+    const meta = document.createElement("div");
+    meta.className = "kanban-card-meta";
+
+    if (category) {
+      const cat = document.createElement("span");
+      cat.className = "category";
+      cat.textContent = category;
+      meta.appendChild(cat);
+    }
+    if (priority) {
+      const pri = document.createElement("span");
+      pri.className = `priority ${priorityClass}`;
+      pri.textContent = priority;
+      meta.appendChild(pri);
+    }
+
+    card.appendChild(h);
+    card.appendChild(meta);
+    return card;
+  }
+
+  function updateKanbanColCounts() {
+    ["todo","in_progress","completed","archived"].forEach((status) => {
+      const col = document.getElementById(`col-${status}`);
+      const count = document.getElementById(`kcount-${status}`);
+      if (col && count) count.textContent = String(col.querySelectorAll(".kanban-card").length);
+    });
+  }
+
+  function buildKanbanBoard() {
+    if (!kanbanBoard) return;
+    // Clear all columns
+    ["todo","in_progress","completed","archived"].forEach((status) => {
+      const col = document.getElementById(`col-${status}`);
+      if (col) col.replaceChildren();
+    });
+
+    // Populate from task list rows
+    const rows = Array.from(document.querySelectorAll("#taskList .task-row"));
+    rows.forEach((row) => {
+      const status = row.dataset.status || "todo";
+      const colId = `col-${status}`;
+      const col = document.getElementById(colId);
+      if (!col) return;
+      col.appendChild(buildKanbanCard(row));
+    });
+
+    updateKanbanColCounts();
+    initKanbanDragDrop();
+  }
+
+  function updateKanbanCard(taskId, newStatus) {
+    if (!kanbanBoard || kanbanBoard.hidden) return;
+    const existing = kanbanBoard.querySelector(`.kanban-card[data-task-id="${taskId}"]`);
+    if (!existing) return;
+    const targetCol = document.getElementById(`col-${newStatus}`);
+    if (!targetCol) return;
+    existing.remove();
+    // Re-build from the task row to get fresh data
+    const row = document.querySelector(`#taskList .task-row[data-task-id="${taskId}"]`);
+    if (row) targetCol.prepend(buildKanbanCard(row));
+    updateKanbanColCounts();
+    initKanbanDragDrop();
+  }
+
+  function initKanbanDragDrop() {
+    if (!kanbanBoard) return;
+
+    kanbanBoard.querySelectorAll(".kanban-card").forEach((card) => {
+      card.addEventListener("dragstart", (evt) => {
+        draggedTaskId = card.dataset.taskId;
+        evt.dataTransfer.setData("text/plain", draggedTaskId);
+        evt.dataTransfer.effectAllowed = "move";
+        window.requestAnimationFrame(() => card.classList.add("is-dragging"));
+      });
+      card.addEventListener("dragend", () => {
+        card.classList.remove("is-dragging");
+        draggedTaskId = null;
+      });
+    });
+
+    kanbanBoard.querySelectorAll(".kanban-col").forEach((col) => {
+      const cards = col.querySelector(".kanban-cards");
+      col.addEventListener("dragover", (evt) => {
+        evt.preventDefault();
+        evt.dataTransfer.dropEffect = "move";
+        col.classList.add("drag-over");
+      });
+      col.addEventListener("dragleave", (evt) => {
+        if (!col.contains(evt.relatedTarget)) col.classList.remove("drag-over");
+      });
+      col.addEventListener("drop", (evt) => {
+        evt.preventDefault();
+        col.classList.remove("drag-over");
+        const id = evt.dataTransfer.getData("text/plain");
+        if (!id) return;
+        const newStatus = col.dataset.status;
+        const card = kanbanBoard.querySelector(`.kanban-card[data-task-id="${id}"]`);
+        if (card) {
+          cards.appendChild(card);
+          card.classList.remove("is-dragging");
+        }
+        updateKanbanColCounts();
+
+        // Persist to API
+        fetch(`${apiBasePath}/tasks.php`, {
+          method: "PATCH",
+          headers: csrfHeaders(),
+          body: JSON.stringify({ id: Number(id), status: newStatus })
+        }).then(async (response) => {
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || "Could not update task status");
+          // Sync the list view row
+          const row = document.querySelector(`#taskList .task-row[data-task-id="${id}"]`);
+          if (row) {
+            row.dataset.status = newStatus;
+            row.classList.toggle("is-complete", newStatus === "completed");
+          }
+          updateDashboardStats();
+          showToast(`Moved to ${newStatus.replace("_", " ")}`);
+        }).catch((error) => {
+          showToast(error.message);
+          buildKanbanBoard(); // Rebuild to reset position on error
+        });
+      });
+    });
+  }
+
+  function switchToListView() {
+    if (!kanbanBoard || !taskList) return;
+    kanbanBoard.hidden = true;
+    taskList.hidden = false;
+    listViewBtn?.classList.add("active");
+    listViewBtn?.setAttribute("aria-pressed", "true");
+    boardViewBtn?.classList.remove("active");
+    boardViewBtn?.setAttribute("aria-pressed", "false");
+    localStorage.setItem("personal-os-task-view", "list");
+  }
+
+  function switchToBoardView() {
+    if (!kanbanBoard || !taskList) return;
+    taskList.hidden = true;
+    kanbanBoard.hidden = false;
+    boardViewBtn?.classList.add("active");
+    boardViewBtn?.setAttribute("aria-pressed", "true");
+    listViewBtn?.classList.remove("active");
+    listViewBtn?.setAttribute("aria-pressed", "false");
+    buildKanbanBoard();
+    localStorage.setItem("personal-os-task-view", "board");
+  }
+
+  if (listViewBtn) listViewBtn.addEventListener("click", switchToListView);
+  if (boardViewBtn) boardViewBtn.addEventListener("click", switchToBoardView);
+
+  // Restore saved view preference
+  if (localStorage.getItem("personal-os-task-view") === "board") {
+    switchToBoardView();
+  }
+
 })();

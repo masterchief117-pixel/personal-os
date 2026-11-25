@@ -57,12 +57,18 @@ try {
             'color' => $color,
             'pinned' => !empty($input['is_pinned']) ? 1 : 0,
         ]);
-        notesJson(['id' => (int) $pdo->lastInsertId(), 'message' => 'Note added'], 201);
+        $noteId = (int) $pdo->lastInsertId();
+        auditEvent($pdo, $userId, 'note.created', 'note', $noteId);
+        notesJson(['id' => $noteId, 'message' => 'Note added'], 201);
     }
 
     if ($method === 'PATCH') {
         $id = (int) ($input['id'] ?? 0);
         if ($id < 1) notesJson(['error' => 'Valid note ID is required'], 422);
+        $owned = $pdo->prepare('SELECT id FROM notes WHERE id = :id AND user_id = :user_id');
+        $owned->execute(['id' => $id, 'user_id' => $userId]);
+        if (!$owned->fetch()) notesJson(['error' => 'Note not found'], 404);
+
         $fields = [];
         $params = ['id' => $id, 'user_id' => $userId];
         if (array_key_exists('title', $input)) {
@@ -80,14 +86,19 @@ try {
         if (!$fields) notesJson(['error' => 'No note fields supplied'], 422);
         $statement = $pdo->prepare('UPDATE notes SET ' . implode(', ', $fields) . ' WHERE id = :id AND user_id = :user_id');
         $statement->execute($params);
+        auditEvent($pdo, $userId, 'note.updated', 'note', $id);
         notesJson(['message' => 'Note updated']);
     }
 
     if ($method === 'DELETE') {
         $id = (int) ($input['id'] ?? 0);
         if ($id < 1) notesJson(['error' => 'Valid note ID is required'], 422);
+        $owned = $pdo->prepare('SELECT id FROM notes WHERE id = :id AND user_id = :user_id');
+        $owned->execute(['id' => $id, 'user_id' => $userId]);
+        if (!$owned->fetch()) notesJson(['error' => 'Note not found'], 404);
         $statement = $pdo->prepare('DELETE FROM notes WHERE id = :id AND user_id = :user_id');
         $statement->execute(['id' => $id, 'user_id' => $userId]);
+        auditEvent($pdo, $userId, 'note.deleted', 'note', $id);
         notesJson(['message' => 'Note deleted']);
     }
 

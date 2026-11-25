@@ -37,6 +37,15 @@ test('seeded notes exist', function (): void {
     if ((int) $pdo->query('SELECT COUNT(*) FROM notes')->fetchColumn() < 1) throw new RuntimeException('No notes');
 });
 
+test('sysinfo metrics calculation', function (): void {
+    $root = DIRECTORY_SEPARATOR === '\\' ? (getenv('SystemDrive') ?: 'C:') . '\\' : '/';
+    $total = disk_total_space($root);
+    $free = disk_free_space($root);
+    if ($total <= 0 || $free < 0) throw new RuntimeException('Invalid disk metrics');
+    $usedPercent = round((($total - $free) / $total) * 100, 1);
+    if ($usedPercent < 0 || $usedPercent > 100) throw new RuntimeException('Percentage out of range');
+});
+
 $failed = 0;
 foreach ($tests as [$name, $passed, $error]) {
     echo ($passed ? 'PASS' : 'FAIL') . ' ' . $name;
